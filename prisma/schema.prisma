@@ -1,0 +1,33 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  spotifyId     String   @unique
+  displayName   String?
+  email         String?
+  country       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  shareCards    ShareCard[]
+}
+
+model ShareCard {
+  id            String   @id @default(uuid())
+  userId        String
+  timeRange     String   // e.g., 'short_term', 'medium_term', 'long_term'
+  insightsData  Json     // Processed insights snapshot
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

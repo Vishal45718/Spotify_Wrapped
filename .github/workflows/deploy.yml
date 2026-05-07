@@ -1,0 +1,35 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js 18
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Generate Prisma Client
+      run: npx prisma generate
+      
+    - name: Build
+      run: npm run build
+      env:
+        # Needed for Next.js build if pages depend on envs
+        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+        
+    - name: Lint
+      run: npm run lint
