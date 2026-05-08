@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getIronSession } from 'iron-session';
+import { cookies } from 'next/headers';
 import { SessionData, sessionOptions } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { kv } from '@/lib/kv';
 import { TimeRange } from '@/types/spotify';
 
 export async function POST(req: NextRequest) {
-  const res = NextResponse.json({});
-  const session = await getIronSession<SessionData>(req as any, res as any, sessionOptions);
+  const cookieStore = await cookies();
+  const session = await getIronSession<SessionData>(cookieStore, sessionOptions);
 
   if (!session.isLoggedIn || !session.userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
