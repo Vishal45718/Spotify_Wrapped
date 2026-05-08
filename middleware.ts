@@ -7,8 +7,8 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
   const session = await getIronSession<SessionData>(req as any, res as any, sessionOptions);
 
-  // If going to dashboard, ensure auth
-  if (req.nextUrl.pathname.startsWith('/dashboard')) {
+  // If going to dashboard or story, ensure auth
+  if (req.nextUrl.pathname.startsWith('/dashboard') || req.nextUrl.pathname.startsWith('/story')) {
     if (!session.isLoggedIn) {
       return NextResponse.redirect(new URL('/', req.url));
     }
@@ -32,5 +32,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/'],
+  matcher: ['/dashboard/:path*', '/story/:path*', '/'],
 };
