@@ -10,11 +10,13 @@ import { TrackRow } from '@/components/ui/TrackRow';
 import { GenreDonut } from '@/components/charts/GenreDonut';
 import { TopArtistsBar } from '@/components/charts/TopArtistsBar';
 import { MoodRadar } from '@/components/charts/MoodRadar';
+import { ListeningHours } from '@/components/charts/ListeningHours';
 import { ShareCard } from '@/components/ui/ShareCard';
 import { toPng } from 'html-to-image';
-import { Download, Share2 } from 'lucide-react';
+import { Download, Share2, Play } from 'lucide-react';
 import { useShare } from '@/hooks/useShare';
 import { m, LazyMotion, domAnimation } from 'framer-motion';
+import Link from 'next/link';
 
 export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>('long_term');
@@ -60,7 +62,15 @@ export default function DashboardPage() {
     <LazyMotion features={domAnimation}>
       <main className="min-h-screen p-4 md:p-8 max-w-6xl mx-auto pb-24">
         <header className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
-          <h1 className="text-3xl font-bold tracking-tight">Your Dashboard</h1>
+          <div className="flex flex-col gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Your Dashboard</h1>
+            <Link 
+              href="/story" 
+              className="flex items-center text-[#1DB954] hover:underline font-medium"
+            >
+              <Play className="w-4 h-4 mr-2 fill-[#1DB954]" /> Watch Your Story
+            </Link>
+          </div>
           <TimeRangeToggle value={timeRange} onChange={setTimeRange} disabled={loading} />
         </header>
 
@@ -109,6 +119,11 @@ export default function DashboardPage() {
                     <TrackRow key={track.id} track={track} index={i} />
                   ))}
                 </div>
+              </div>
+
+              <div className="bg-white/5 rounded-3xl p-6 border border-white/10 lg:col-span-2">
+                <h2 className="text-xl font-bold mb-6 text-[#1DB954]">Listening Clock</h2>
+                <ListeningHours data={data.listeningHours} />
               </div>
             </div>
             

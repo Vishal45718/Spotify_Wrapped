@@ -10,8 +10,8 @@ interface Props {
 export function TopArtistsBar({ artists }: Props) {
   const data = artists.slice(0, 10).map((a) => ({
     name: a.name,
-    popularity: a.popularity,
-    url: a.external_urls.spotify,
+    popularity: a.popularity ?? 80,
+    url: a.external_urls?.spotify ?? '#',
   }));
 
   return (
