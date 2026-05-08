@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useInsights } from '@/hooks/useInsights';
 import { TimeRange } from '@/types/spotify';
 import { TimeRangeToggle } from '@/components/ui/TimeRangeToggle';
@@ -13,27 +13,39 @@ import { MoodRadar } from '@/components/charts/MoodRadar';
 import { ListeningHours } from '@/components/charts/ListeningHours';
 import { ShareCard } from '@/components/ui/ShareCard';
 import { toPng } from 'html-to-image';
-import { Download, Share2, Play } from 'lucide-react';
+import { Download, Share2, Play, LogOut, User } from 'lucide-react';
 import { useShare } from '@/hooks/useShare';
 import { m, LazyMotion, domAnimation } from 'framer-motion';
 import Link from 'next/link';
+import { useToast } from '@/components/providers/ToastProvider';
 
 export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>('long_term');
   const { data, loading, error } = useInsights(timeRange);
   const { shareInsights, isSharing } = useShare();
+  const { toast } = useToast();
+  const [userInfo, setUserInfo] = useState<{ displayName?: string; avatarUrl?: string; isDemo?: boolean } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(setUserInfo)
+      .catch(() => {});
+  }, []);
 
   const handleDownload = async () => {
     const node = document.getElementById('share-card-element');
     if (!node) return;
     try {
-      const dataUrl = await toPng(node, { cacheBust: true, pixelRatio: 1 });
+      const dataUrl = await toPng(node, { cacheBust: true, pixelRatio: 2 });
       const link = document.createElement('a');
       link.download = `wrapped-${timeRange}.png`;
       link.href = dataUrl;
       link.click();
+      toast('Card downloaded!', 'success');
     } catch (err) {
       console.error('Failed to download image', err);
+      toast('Download failed. Try again.', 'error');
     }
   };
 
@@ -42,17 +54,31 @@ export default function DashboardPage() {
     const id = await shareInsights(data, timeRange);
     if (id) {
       const url = `${window.location.origin}/share/${id}`;
-      navigator.clipboard.writeText(url);
-      alert('Link copied to clipboard!');
+      await navigator.clipboard.writeText(url);
+      toast('Share link copied to clipboard!', 'success');
+    } else {
+      toast('Failed to generate share link.', 'error');
     }
+  };
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
   };
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="bg-red-500/10 border border-red-500/50 p-6 rounded-xl text-center">
-          <p className="text-red-400 mb-4">{error}</p>
-          <a href="/api/auth" className="text-white underline">Login Again</a>
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="bg-red-500/10 border border-red-500/50 p-8 rounded-2xl text-center max-w-md">
+          <p className="text-red-400 mb-4 text-lg">{error}</p>
+          <div className="flex gap-4 justify-center">
+            <button onClick={() => window.location.reload()} className="px-6 py-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors">
+              Retry
+            </button>
+            <a href="/api/auth/login" className="px-6 py-2 bg-[#1DB954] text-black rounded-full font-bold hover:bg-[#1ED760] transition-colors">
+              Re-login
+            </a>
+          </div>
         </div>
       </div>
     );
@@ -61,17 +87,44 @@ export default function DashboardPage() {
   return (
     <LazyMotion features={domAnimation}>
       <main className="min-h-screen p-4 md:p-8 max-w-6xl mx-auto pb-24">
-        <header className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
-          <div className="flex flex-col gap-2">
-            <h1 className="text-3xl font-bold tracking-tight">Your Dashboard</h1>
-            <Link 
-              href="/story" 
-              className="flex items-center text-[#1DB954] hover:underline font-medium"
-            >
-              <Play className="w-4 h-4 mr-2 fill-[#1DB954]" /> Watch Your Story
-            </Link>
+        {/* Header */}
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
+          <div className="flex items-center gap-4">
+            {/* User avatar */}
+            {userInfo?.avatarUrl ? (
+              <img src={userInfo.avatarUrl} alt="" className="w-12 h-12 rounded-full border-2 border-[#1DB954]/50 shadow-lg" />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center border border-white/20">
+                <User className="w-6 h-6 text-gray-400" />
+              </div>
+            )}
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+                {userInfo?.displayName ? `${userInfo.displayName}'s Dashboard` : 'Your Dashboard'}
+              </h1>
+              <div className="flex items-center gap-4 mt-1">
+                <Link href="/story" className="flex items-center text-[#1DB954] hover:underline font-medium text-sm">
+                  <Play className="w-3.5 h-3.5 mr-1.5 fill-[#1DB954]" /> Watch Story
+                </Link>
+                {userInfo?.isDemo && (
+                  <span className="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-full border border-yellow-500/30">
+                    Demo Mode
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-          <TimeRangeToggle value={timeRange} onChange={setTimeRange} disabled={loading} />
+
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <TimeRangeToggle value={timeRange} onChange={setTimeRange} disabled={loading} />
+            <button
+              onClick={handleLogout}
+              title="Logout"
+              className="p-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+            >
+              <LogOut className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
         </header>
 
         {loading || !data ? (
@@ -127,7 +180,7 @@ export default function DashboardPage() {
               </div>
             </div>
             
-            {/* Hidden Share Card used for canvas generation */}
+            {/* Hidden Share Card */}
             <div className="absolute opacity-0 pointer-events-none -z-50 w-0 h-0 overflow-hidden">
               <ShareCard insights={data} />
             </div>
@@ -136,19 +189,19 @@ export default function DashboardPage() {
 
         {/* Sticky Actions */}
         {!loading && data && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex gap-4 z-50">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex gap-3 z-50">
             <button 
               onClick={handleDownload}
-              className="flex items-center px-6 py-3 bg-[#1DB954] text-black font-bold rounded-full shadow-[0_4px_20px_rgba(29,185,84,0.4)] hover:scale-105 transition-transform"
+              className="flex items-center px-5 py-3 bg-[#1DB954] text-black font-bold rounded-full shadow-[0_4px_20px_rgba(29,185,84,0.4)] hover:scale-105 transition-transform text-sm"
             >
-              <Download className="w-5 h-5 mr-2" /> Download Card
+              <Download className="w-4 h-4 mr-2" /> Download
             </button>
             <button 
               onClick={handleShareUrl}
               disabled={isSharing}
-              className="flex items-center px-6 py-3 bg-white text-black font-bold rounded-full shadow-lg hover:scale-105 transition-transform disabled:opacity-50"
+              className="flex items-center px-5 py-3 bg-white text-black font-bold rounded-full shadow-lg hover:scale-105 transition-transform disabled:opacity-50 text-sm"
             >
-              <Share2 className="w-5 h-5 mr-2" /> {isSharing ? 'Saving...' : 'Get Link'}
+              <Share2 className="w-4 h-4 mr-2" /> {isSharing ? 'Saving...' : 'Share'}
             </button>
           </div>
         )}
@@ -159,7 +212,7 @@ export default function DashboardPage() {
 
 function StatCard({ title, value }: { title: string, value: string }) {
   return (
-    <div className="bg-white/5 p-4 rounded-2xl border border-white/10 flex flex-col justify-center items-center text-center">
+    <div className="bg-white/5 p-4 rounded-2xl border border-white/10 flex flex-col justify-center items-center text-center hover:bg-white/[0.08] transition-colors">
       <p className="text-gray-400 text-sm mb-1">{title}</p>
       <p className="text-xl font-bold capitalize text-white">{value}</p>
     </div>
