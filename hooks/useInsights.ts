@@ -17,10 +17,23 @@ export function useInsights(timeRange: TimeRange) {
         const res = await fetch(`/api/insights?timeRange=${timeRange}`);
         if (!res.ok) {
           if (res.status === 401) {
-            window.location.href = '/';
+            // Try token refresh first
+            const refreshRes = await fetch('/api/auth/refresh', { method: 'POST' });
+            if (refreshRes.ok) {
+              // Retry the insights fetch
+              const retryRes = await fetch(`/api/insights?timeRange=${timeRange}`);
+              if (retryRes.ok) {
+                const json = await retryRes.json();
+                if (mounted) setData(json);
+                return;
+              }
+            }
+            // Refresh failed — redirect to login
+            window.location.href = '/login?error=session_expired';
             return;
           }
-          throw new Error('Failed to fetch insights');
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to fetch insights');
         }
         const json = await res.json();
         if (mounted) {

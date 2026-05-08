@@ -7,6 +7,42 @@ import { processInsights } from '@/utils/scoring';
 import { kv } from '@/lib/kv';
 import { TimeRange } from '@/types/spotify';
 
+/** Attempt to refresh the access token if expired */
+async function tryRefreshToken(session: SessionData): Promise<boolean> {
+  if (!session.refreshToken || session.isDemo) return false;
+  if (session.expiresAt && Date.now() < session.expiresAt - 60000) return false; // Still valid
+
+  try {
+    const tokenParams = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: session.refreshToken,
+    });
+    const authHeader = Buffer.from(
+      `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+    ).toString('base64');
+
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${authHeader}`,
+      },
+      body: tokenParams.toString(),
+    });
+
+    if (!res.ok) return false;
+
+    const data = await res.json();
+    session.accessToken = data.access_token;
+    session.expiresAt = Date.now() + data.expires_in * 1000;
+    if (data.refresh_token) session.refreshToken = data.refresh_token;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
   const session = await getIronSession<SessionData>(cookieStore, sessionOptions);
@@ -15,22 +51,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const url = new URL(req.url);
-  const timeRange = (url.searchParams.get('timeRange') as TimeRange) || 'long_term';
-
-  const cacheKey = `insights:${session.userId}:${timeRange}`;
-  
-  try {
-    const cached = await kv.get(cacheKey);
-    if (cached) {
-      return NextResponse.json(cached);
-    }
-  } catch (e) {
-    console.warn('KV GET error', e);
+  // Auto-refresh expired tokens
+  const refreshed = await tryRefreshToken(session);
+  if (refreshed) {
+    await session.save();
   }
 
-  // Return mock data when using mock authentication
-  if (session.accessToken === 'mock_token') {
+  const url = new URL(req.url);
+  const timeRange = (url.searchParams.get('timeRange') as TimeRange) || 'long_term';
+  const cacheKey = `insights:${session.userId}:${timeRange}`;
+
+  try {
+    const cached = await kv.get(cacheKey);
+    if (cached) return NextResponse.json(cached);
+  } catch (e) {
+    // KV unavailable — proceed without cache
+  }
+
+  // Demo mode returns mock data
+  if (session.isDemo || session.accessToken === 'demo_token' || session.accessToken === 'mock_token') {
     const mockInsights = {
       topArtists: [
         { id: '1', name: 'Daft Punk', genres: ['electronic', 'french house'], images: [], popularity: 82, external_urls: { spotify: '#' } },
@@ -53,25 +92,17 @@ export async function GET(req: NextRequest) {
         { genre: 'Indie Rock', count: 20 },
         { genre: 'R&B', count: 15 },
       ],
-      scores: {
-        mood: 82,
-        energy: 76,
-        discovery: 65,
-        diversity: 90,
-      },
+      scores: { mood: 82, energy: 76, discovery: 65, diversity: 90 },
       personality: 'Genre Tourist',
       listeningHours: Array.from({ length: 24 }).map((_, i) => ({ hour: i, count: Math.floor(Math.random() * 50) })),
       totalListeningMinutes: 42350,
     };
 
-    try {
-      await kv.set(cacheKey, mockInsights, { ex: 21600 });
-    } catch (e) {
-      console.warn('KV SET error', e);
-    }
+    try { await kv.set(cacheKey, mockInsights, { ex: 21600 }); } catch {}
     return NextResponse.json(mockInsights);
   }
 
+  // Real Spotify data fetch
   try {
     const spotify = new SpotifyService(session.accessToken);
     const [artists, tracks, recent] = await Promise.all([
@@ -83,14 +114,13 @@ export async function GET(req: NextRequest) {
     const audioFeatures = await spotify.getAudioFeatures(tracks.map(t => t.id));
     const insights = processInsights({ artists, tracks, recent, audioFeatures });
 
-    try {
-      await kv.set(cacheKey, insights, { ex: 21600 }); // 6h TTL
-    } catch (e) {
-      console.warn('KV SET error', e);
-    }
+    try { await kv.set(cacheKey, insights, { ex: 21600 }); } catch {}
 
     return NextResponse.json(insights);
   } catch (error: any) {
+    if (error?.status === 401) {
+      return NextResponse.json({ error: 'Session expired. Please re-login.' }, { status: 401 });
+    }
     console.error('Insights error:', error);
     return NextResponse.json({ error: 'Failed to process insights' }, { status: 500 });
   }
