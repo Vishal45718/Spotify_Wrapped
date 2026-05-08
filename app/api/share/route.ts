@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId: session.userId,
         timeRange,
-        insightsData,
+        insightsData: JSON.stringify(insightsData),
       },
     });
 
@@ -56,7 +56,9 @@ export async function GET(req: NextRequest) {
 
   if (!shareCard) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  await kv.set(cacheKey, { ...(shareCard.insightsData as object), shareId: id }, { ex: 604800 });
+  const parsedInsights = JSON.parse(shareCard.insightsData);
+
+  await kv.set(cacheKey, { ...parsedInsights, shareId: id }, { ex: 604800 });
   
-  return NextResponse.json({ ...(shareCard.insightsData as object), shareId: id });
+  return NextResponse.json({ ...parsedInsights, shareId: id });
 }
