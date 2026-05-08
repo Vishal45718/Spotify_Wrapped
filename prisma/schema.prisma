@@ -16,6 +16,9 @@ model User {
   displayName   String?
   email         String?
   country       String?
+  avatarUrl     String?
+  refreshToken  String?  // Encrypted Spotify refresh token for persistent re-auth
+  lastSyncAt    DateTime? // When Spotify data was last fetched
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   
