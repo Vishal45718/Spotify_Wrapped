@@ -3,28 +3,25 @@ import type { NextRequest } from 'next/server';
 import { getIronSession } from 'iron-session';
 import { SessionData, sessionOptions } from '@/lib/session';
 
+const PROTECTED_PATHS = ['/dashboard', '/story', '/compare'];
+const AUTH_PATHS = ['/login'];
+
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
+  // Middleware runs in Edge — must use req/res pattern (cookies() not available here)
   const session = await getIronSession<SessionData>(req as any, res as any, sessionOptions);
 
-  // If going to dashboard or story, ensure auth
-  if (req.nextUrl.pathname.startsWith('/dashboard') || req.nextUrl.pathname.startsWith('/story')) {
-    if (!session.isLoggedIn) {
-      return NextResponse.redirect(new URL('/', req.url));
-    }
-    // Check if token needs refresh
-    if (session.expiresAt && Date.now() > session.expiresAt - 300000) {
-      // In middleware, we can't easily perform fetch and modify cookies using iron-session if we await fetch.
-      // Alternatively, we redirect to a silent refresh page or let the client/API route handle it.
-      // Since iron-session doesn't easily let you fetch + rewrite cookie inside edge middleware
-      // We will let the client components trigger `/api/session` or `/api/insights` which handles refresh
-      // Oh wait, iron-session v8 works in edge. We could fetch `/api/refresh` here.
-      // For simplicity, we just pass through and let client API calls hit 401 and handle it or have a background process.
-    }
+  const { pathname } = req.nextUrl;
+
+  // Protect private routes
+  const isProtected = PROTECTED_PATHS.some(p => pathname.startsWith(p));
+  if (isProtected && !session.isLoggedIn) {
+    return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  // If going to login page while logged in, redirect to dashboard
-  if (req.nextUrl.pathname === '/' && session.isLoggedIn) {
+  // Redirect logged-in users away from auth pages
+  const isAuthPage = AUTH_PATHS.some(p => pathname === p) || pathname === '/';
+  if (isAuthPage && session.isLoggedIn) {
     return NextResponse.redirect(new URL('/dashboard', req.url));
   }
 
@@ -32,5 +29,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/story/:path*', '/'],
+  matcher: ['/', '/login', '/dashboard/:path*', '/story/:path*', '/compare/:path*'],
 };
