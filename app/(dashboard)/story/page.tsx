@@ -154,7 +154,7 @@ function renderSlideContent(slide: any, data: any) {
     case 'top-artists':
       return (
         <div className="w-full max-w-sm space-y-8">
-          <h2 className="text-3xl font-bold mb-8">You couldn't stop listening to...</h2>
+          <h2 className="text-3xl font-bold mb-8">You could not stop listening to...</h2>
           <div className="space-y-4">
             {data.topArtists.slice(0, 3).map((artist: any, i: number) => (
               <m.div 
