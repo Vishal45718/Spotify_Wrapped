@@ -5,17 +5,21 @@ import {
   SpotifyTrack,
 } from '@/types/spotify';
 import { ProcessedInsights, Scores } from '@/types/insights';
+import { getGenreTravelData } from '@/utils/genreLocations';
 
 export function processInsights({
   artists,
   tracks,
   recent,
   audioFeatures,
+  userCountryCode,
 }: {
   artists: SpotifyArtist[];
   tracks: SpotifyTrack[];
   recent: SpotifyRecentlyPlayed[];
   audioFeatures: SpotifyAudioFeatures[];
+  /** Spotify profile country (ISO 3166-1 alpha-2) for genre travel arcs */
+  userCountryCode?: string;
 }): ProcessedInsights {
   // Top genres: flatten artist.genres[], count frequency
   const genreCounts = artists
@@ -29,6 +33,8 @@ export function processInsights({
     .map(([genre, count]) => ({ genre, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
+
+  const locationData = getGenreTravelData(topGenres, userCountryCode);
 
   const avg = (arr: number[]) => (arr.length ? arr.reduce((sum, n) => sum + n, 0) / arr.length : 0);
 
@@ -82,7 +88,8 @@ export function processInsights({
     personality,
     listeningHours,
     totalListeningMinutes,
-  };
+    locationData,
+  } satisfies ProcessedInsights;
 }
 
 function getPersonality(scores: Scores): string {
