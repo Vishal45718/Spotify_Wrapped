@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { SessionData, sessionOptions } from '@/lib/session';
 import { SpotifyService } from '@/services/spotify';
 import { processInsights } from '@/utils/scoring';
+import { getGenreTravelData } from '@/utils/genreLocations';
 import { kv } from '@/lib/kv';
 import { TimeRange } from '@/types/spotify';
 
@@ -70,6 +71,13 @@ export async function GET(req: NextRequest) {
 
   // Demo mode returns mock data
   if (session.isDemo || session.accessToken === 'demo_token' || session.accessToken === 'mock_token') {
+    const demoTopGenres = [
+      { genre: 'Pop', count: 42 },
+      { genre: 'K-Pop', count: 38 },
+      { genre: 'Reggaeton', count: 32 },
+      { genre: 'Hip Hop', count: 25 },
+      { genre: 'Indie Rock', count: 20 },
+    ];
     const mockInsights = {
       topArtists: [
         { id: '1', name: 'Daft Punk', genres: ['electronic', 'french house'], images: [], popularity: 82, external_urls: { spotify: '#' } },
@@ -85,17 +93,12 @@ export async function GET(req: NextRequest) {
         { id: '4', name: 'Alright', duration_ms: 219000, popularity: 85, artists: [{ name: 'Kendrick Lamar' }], album: { name: 'To Pimp a Butterfly', images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273cdb645498cd3d8a2bf170cb6' }] }, external_urls: { spotify: '#' } },
         { id: '5', name: 'The Less I Know The Better', duration_ms: 216000, popularity: 92, artists: [{ name: 'Tame Impala' }], album: { name: 'Currents', images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2739e1cfc756886ac782e363d79' }] }, external_urls: { spotify: '#' } },
       ],
-      topGenres: [
-        { genre: 'Pop', count: 42 },
-        { genre: 'Electronic', count: 38 },
-        { genre: 'Hip Hop', count: 25 },
-        { genre: 'Indie Rock', count: 20 },
-        { genre: 'R&B', count: 15 },
-      ],
+      topGenres: demoTopGenres,
       scores: { mood: 82, energy: 76, discovery: 65, diversity: 90 },
       personality: 'Genre Tourist',
       listeningHours: Array.from({ length: 24 }).map((_, i) => ({ hour: i, count: Math.floor(Math.random() * 50) })),
       totalListeningMinutes: 42350,
+      locationData: getGenreTravelData(demoTopGenres, 'US'),
     };
 
     try { await kv.set(cacheKey, mockInsights, { ex: 21600 }); } catch {}
@@ -105,14 +108,21 @@ export async function GET(req: NextRequest) {
   // Real Spotify data fetch
   try {
     const spotify = new SpotifyService(session.accessToken);
-    const [artists, tracks, recent] = await Promise.all([
+    const [me, artists, tracks, recent] = await Promise.all([
+      spotify.getMe(),
       spotify.getTopArtists(timeRange),
       spotify.getTopTracks(timeRange),
       spotify.getRecentlyPlayed(),
     ]);
 
     const audioFeatures = await spotify.getAudioFeatures(tracks.map(t => t.id));
-    const insights = processInsights({ artists, tracks, recent, audioFeatures });
+    const insights = processInsights({
+      artists,
+      tracks,
+      recent,
+      audioFeatures,
+      userCountryCode: me.country,
+    });
 
     try { await kv.set(cacheKey, insights, { ex: 21600 }); } catch {}
 
