@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { m, LazyMotion, domAnimation } from 'framer-motion';
 import { Music, Headphones, BarChart3, Share2, Loader2, AlertTriangle, Sparkles } from 'lucide-react';
-import Link from 'next/link';
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_state: 'Authentication failed. Please try again.',
@@ -20,6 +19,20 @@ const FEATURES = [
 ];
 
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#191414] via-[#121212] to-[#181818]">
+          <Loader2 className="w-10 h-10 text-[#1DB954] animate-spin" />
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const searchParams = useSearchParams();
   const errorCode = searchParams.get('error');
   const [isLoading, setIsLoading] = useState(false);
