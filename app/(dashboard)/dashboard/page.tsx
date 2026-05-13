@@ -17,7 +17,21 @@ import { Download, Share2, Play, LogOut, User } from 'lucide-react';
 import { useShare } from '@/hooks/useShare';
 import { m, LazyMotion, domAnimation } from 'framer-motion';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useToast } from '@/components/providers/ToastProvider';
+
+const GenreTravelMap = dynamic(
+  () => import('@/components/charts/GenreTravelMap'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 aspect-[16/9] min-h-[200px] rounded-2xl bg-white/[0.04] animate-pulse border border-white/10" />
+        <div className="rounded-2xl bg-white/[0.04] animate-pulse border border-white/10 h-64" />
+      </div>
+    ),
+  }
+);
 
 export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>('long_term');
@@ -178,6 +192,20 @@ export default function DashboardPage() {
                 <h2 className="text-xl font-bold mb-6 text-[#1DB954]">Listening Clock</h2>
                 <ListeningHours data={data.listeningHours} />
               </div>
+
+              <m.div
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                className="bg-white/5 rounded-3xl p-6 border border-white/10 lg:col-span-2"
+              >
+                <h2 className="text-xl font-bold mb-1 text-[#1DB954]">Genre Travel Map</h2>
+                <p className="text-gray-400 text-sm mb-6 max-w-2xl">
+                  Follow the glow: each arc is a playful hop from your profile country to where your top genres took
+                  root on the map.
+                </p>
+                <GenreTravelMap locationData={data.locationData} topGenres={data.topGenres} />
+              </m.div>
             </div>
             
             {/* Hidden Share Card */}
