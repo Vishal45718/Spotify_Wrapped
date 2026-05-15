@@ -7,10 +7,15 @@ import { SpotifyService } from '@/services/spotify';
 import { isSpotifyConfigured, getRedirectUri } from '@/lib/env';
 
 export async function GET(req: NextRequest) {
+  console.log("CALLBACK ROUTE HIT");
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
   const errorParam = url.searchParams.get('error');
+
+  console.log('--- Spotify Callback ---');
+  console.log('Incoming code:', code ? 'present' : 'missing');
+  console.log('Incoming state:', state);
 
   // Spotify may redirect back with ?error=access_denied if user cancels
   if (errorParam) {
@@ -18,10 +23,13 @@ export async function GET(req: NextRequest) {
   }
 
   const storedState = req.cookies.get('spotify_auth_state')?.value;
+  console.log('Stored state:', storedState);
+  
   const isDemoFlow = code === 'demo_code';
 
   // CSRF validation — skip for demo flow (cookie doesn't survive same-origin redirect chain)
   if (!code || !state || (!isDemoFlow && state !== storedState)) {
+    console.log('CSRF Validation Failed. Code or state mismatch.');
     return NextResponse.redirect(new URL('/login?error=invalid_state', req.url));
   }
 
@@ -69,6 +77,12 @@ export async function GET(req: NextRequest) {
     }
 
     const tokenData = await tokenResponse.json();
+    console.log('Token exchange result: Success', { 
+      hasAccessToken: !!tokenData.access_token, 
+      hasRefreshToken: !!tokenData.refresh_token, 
+      expires_in: tokenData.expires_in 
+    });
+
     access_token = tokenData.access_token;
     refresh_token = tokenData.refresh_token;
     expires_in = tokenData.expires_in;
@@ -121,5 +135,8 @@ export async function GET(req: NextRequest) {
   // Clean up CSRF state cookie
   cookieStore.delete('spotify_auth_state');
 
-  return NextResponse.redirect(new URL('/dashboard', req.url));
+  const redirectDest = new URL('/dashboard', req.url).toString();
+  console.log('Session saved successfully. Redirecting to:', redirectDest);
+
+  return NextResponse.redirect(redirectDest);
 }
